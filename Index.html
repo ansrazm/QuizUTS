@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ujian - Mode Terkunci</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Arial, sans-serif;
+    background: #f5f5f5;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  #warning-banner {
+    background: #ffebee;
+    color: #c62828;
+    padding: 10px 16px;
+    font-size: 14px;
+    text-align: center;
+    display: none;
+    border-bottom: 2px solid #c62828;
+  }
+  #warning-banner.show { display: block; }
+  #counter {
+    font-weight: bold;
+  }
+  #locked-screen {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.92);
+    color: white;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    text-align: center;
+    padding: 24px;
+    z-index: 999;
+  }
+  #locked-screen.show { display: flex; }
+  #locked-screen h1 { font-size: 22px; margin-bottom: 12px; }
+  #locked-screen p { font-size: 15px; opacity: 0.85; max-width: 400px; }
+  iframe {
+    flex: 1;
+    width: 100%;
+    border: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="warning-banner">
+  ⚠️ Kamu keluar dari halaman ujian! Pelanggaran ke-<span id="counter">0</span>. Tercatat otomatis.
+</div>
+
+<div id="locked-screen">
+  <h1>🔒 Ujian Dikunci</h1>
+  <p>Kamu sudah keluar dari halaman ujian sebanyak <span id="lockedCount"></span> kali. Sesuai aturan, ujian ini dihentikan. Hubungi pengawas/dosen untuk tindak lanjut.</p>
+</div>
+
+<!-- GANTI URL DI BAWAH INI DENGAN LINK GOOGLE FORM KAMU -->
+<!-- Tambahkan ?embedded=true di akhir URL Form -->
+<iframe id="quizFrame" src="https://docs.google.com/forms/d/e/1FAIpQLSdqSgntlukqaZBv5UzIzeX_rdTEXTdK8UD4GeFOsJQUutOnEw/viewform?embedded=true"></iframe>
+
+<script>
+  // ====== PENGATURAN ======
+  const MAX_PELANGGARAN = 2;   // ujian dikunci setelah keluar sebanyak ini
+  const WEBHOOK_URL = "";      // opsional: isi URL Google Apps Script Web App untuk mencatat log ke Sheet
+
+  let violations = 0;
+  let locked = false;
+
+  function catatPelanggaran(alasan) {
+    if (locked) return;
+    violations++;
+    document.getElementById('counter').textContent = violations;
+    document.getElementById('warning-banner').classList.add('show');
+
+    // Kirim log ke server (opsional, kalau WEBHOOK_URL diisi)
+    if (WEBHOOK_URL) {
+      fetch(WEBHOOK_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          waktu: new Date().toISOString(),
+          alasan: alasan,
+          pelanggaranKe: violations
+        })
+      }).catch(() => {});
+    }
+
+    if (violations >= MAX_PELANGGARAN) {
+      locked = true;
+      document.getElementById('lockedCount').textContent = violations;
+      document.getElementById('locked-screen').classList.add('show');
+      document.getElementById('quizFrame').style.display = 'none';
+    }
+  }
+
+  // Deteksi saat tab/app di-minimize atau pindah aplikasi
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      catatPelanggaran('Berpindah tab/aplikasi');
+    }
+  });
+
+  // Deteksi saat window kehilangan fokus (buka app lain, alt-tab, dll)
+  window.addEventListener('blur', function () {
+    catatPelanggaran('Window kehilangan fokus');
+  });
+
+  // Cegah klik kanan (opsional, mengurangi copy-paste)
+  document.addEventListener('contextmenu', e => e.preventDefault());
+
+  // Peringatan sebelum menutup/reload halaman
+  window.addEventListener('beforeunload', function (e) {
+    if (!locked) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+</script>
+
+</body>
+</html>
