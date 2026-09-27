@@ -81,6 +81,31 @@
   // ====== GANTI DENGAN LINK GOOGLE FORM KAMU ======
   const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdqSgntlukqaZBv5UzIzeX_rdTEXTdK8UD4GeFOsJQUutOnEw/viewform";
 
+  // Entry ID hasil dari "Formulir pra-pengisian" -> dipakai buat auto-fill Nama/NIM/Kelas/Jadwal di Form
+  const ENTRY_NAMA = '555334550';
+  const ENTRY_NIM = '492123988';
+  const ENTRY_KELAS = '1815536976';
+  const ENTRY_JADWAL = '1339155667';
+
+  // Mapping kelas -> teks Hari/Jam Ujian PERSIS sama seperti pilihan di Form (biar auto-fill cocok)
+  const KELAS_KE_JADWAL_TEXT = {
+    'Asp Senin jam 13.30': 'Senin, 14.15 - 14.45 (Kelas jam 13.30)',
+    'Asp Senin jam 15.30': 'Senin, 15.15 - 15.45 (Kelas jam 15.30)',
+    'Asp Kamis': 'Kamis, 08.15 - 08.45'
+  };
+
+  function buatUrlFormTerisi(nama, nim, kelas) {
+    const jadwalText = KELAS_KE_JADWAL_TEXT[kelas] || '';
+    const params = new URLSearchParams();
+    params.set('usp', 'pp_url');
+    params.set('embedded', 'true');
+    params.set('entry.' + ENTRY_NAMA, nama);
+    params.set('entry.' + ENTRY_NIM, nim);
+    params.set('entry.' + ENTRY_KELAS, kelas);
+    params.set('entry.' + ENTRY_JADWAL, jadwalText);
+    return FORM_URL + '?' + params.toString();
+  }
+
   let nama = "", nim = "", kelas = "";
   let locked = false;
   let pollTimer = null;
@@ -154,7 +179,7 @@
       document.getElementById('counter').textContent = cek.pelanggaran;
       document.getElementById('warning-banner').classList.add('show');
     }
-    document.getElementById('quizFrame').src = FORM_URL + '?embedded=true';
+    document.getElementById('quizFrame').src = buatUrlFormTerisi(nama, nim, kelas);
     document.getElementById('quizFrame').style.display = 'block';
     document.getElementById('quizWrap').classList.add('show');
 
