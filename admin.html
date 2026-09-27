@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Pengawas Ujian</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 16px; }
+  h1 { font-size: 20px; margin-bottom: 16px; color: #222; }
+
+  #loginBox { max-width: 340px; margin: 60px auto; text-align: center; }
+  #loginBox input {
+    width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid #ccc;
+    border-radius: 8px; font-size: 15px;
+  }
+  #loginBox button {
+    width: 100%; padding: 12px; background: #2563eb; color: white; border: none;
+    border-radius: 8px; font-size: 15px; cursor: pointer;
+  }
+  #loginMsg { color: #c62828; font-size: 13px; margin-top: 8px; }
+
+  #dashboard { display: none; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .toolbar button {
+    padding: 8px 14px; background: #16a34a; color: white; border: none;
+    border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; }
+  th, td { padding: 10px 8px; text-align: left; font-size: 13px; border-bottom: 1px solid #eee; }
+  th { background: #1e293b; color: white; }
+  .terkunci { color: #c62828; font-weight: bold; }
+  .aman { color: #16a34a; }
+  .btn-unlock {
+    padding: 6px 10px; background: #f59e0b; color: white; border: none;
+    border-radius: 6px; cursor: pointer; font-size: 12px;
+  }
+  .empty { text-align: center; padding: 30px; color: #888; }
+  #lastUpdate { font-size: 12px; color: #666; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div id="loginBox">
+  <h1>🛡️ Dashboard Pengawas</h1>
+  <input type="password" id="inpPasscode" placeholder="Masukkan passcode">
+  <button onclick="login()">Masuk</button>
+  <div id="loginMsg"></div>
+</div>
+
+<div id="dashboard">
+  <h1>🛡️ Dashboard Pengawas Ujian</h1>
+  <div class="toolbar">
+    <span id="jumlahMhs">0 mahasiswa</span>
+    <button onclick="muatUlang()">🔄 Refresh</button>
+  </div>
+  <table>
+    <thead>
+      <tr><th>NIM</th><th>Nama</th><th>Kelas</th><th>Pelanggaran</th><th>Status</th><th>Aksi</th></tr>
+    </thead>
+    <tbody id="tabelBody"></tbody>
+  </table>
+  <div id="lastUpdate"></div>
+</div>
+
+<script>
+  // ====== GANTI DENGAN URL WEB APP BACKEND KAMU (sama dengan yang di wrapper mahasiswa) ======
+  const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzmlf-Z9fL1UT1-lrh7p5RMNFjy-D5W9ym47qD6oZY7VYBY5zuyAwu4naeOtjoEEq8KSg/exec";
+
+  let passcode = "";
+  let autoRefreshTimer = null;
+
+  async function panggilBackend(payload) {
+    try {
+      const res = await fetch(BACKEND_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+      });
+      return await res.json();
+    } catch (e) {
+      return { ok: false, error: 'Gagal konek ke server: ' + e.message };
+    }
+  }
+
+  async function login() {
+    passcode = document.getElementById('inpPasscode').value;
+    const msg = document.getElementById('loginMsg');
+    msg.textContent = 'Memeriksa...';
+
+    const res = await panggilBackend({ action: 'listStudents', passcode });
+    if (!res.ok) {
+      msg.textContent = res.error || 'Passcode salah.';
+      return;
+    }
+
+    document.getElementById('loginBox').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    renderTabel(res.students);
+    autoRefreshTimer = setInterval(muatUlang, 15000); // auto refresh tiap 15 detik
+  }
+
+  async function muatUlang() {
+    const res = await panggilBackend({ action: 'listStudents', passcode });
+    if (res.ok) renderTabel(res.students);
+  }
+
+  function renderTabel(students) {
+    const tbody = document.getElementById('tabelBody');
+    document.getElementById('jumlahMhs').textContent = students.length + ' mahasiswa tercatat';
+    document.getElementById('lastUpdate').textContent = 'Update terakhir: ' + new Date().toLocaleTimeString('id-ID');
+
+    if (students.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty">Belum ada mahasiswa yang tercatat</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = students.map(s => `
+      <tr>
+        <td>${s.nim}</td>
+        <td>${s.nama}</td>
+        <td>${s.kelas}</td>
+        <td>${s.pelanggaran}</td>
+        <td class="${s.terkunci ? 'terkunci' : 'aman'}">${s.terkunci ? '🔒 Terkunci' : '✅ Aman'}</td>
+        <td>${s.terkunci ? `<button class="btn-unlock" onclick="unlock('${s.nim}')">Unlock</button>` : '-'}</td>
+      </tr>
+    `).join('');
+  }
+
+  async function unlock(nim) {
+    const res = await panggilBackend({ action: 'unlock', nim, passcode });
+    if (res.ok) {
+      muatUlang();
+    } else {
+      alert(res.error || 'Gagal unlock');
+    }
+  }
+</script>
+
+</body>
+</html>
