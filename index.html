@@ -33,7 +33,6 @@
     <h2>🔒 Masuk Ujian</h2>
     <input type="text" id="inpNama" placeholder="Nama Lengkap" autocomplete="off">
     <input type="text" id="inpNim" placeholder="NIM" autocomplete="off">
-    <input type="email" id="inpEmail" placeholder="Email UNRI (nama@...unri.ac.id)" autocomplete="off">
     <select id="inpKelas">
       <option value="">-- Pilih Kelas --</option>
       <option value="Asp Senin jam 13.30">Asp Senin jam 13.30</option>
@@ -67,7 +66,7 @@
   const ENTRY_NIM = '492123988';
   const ENTRY_KELAS = '1815536976';
   const ENTRY_JADWAL = '1339155667';
-  const ENTRY_EMAIL = '1769680087'; // ISI dengan angka entry pertanyaan "Email" di Form (dari link pra-isi). Kosong = email tidak diisi otomatis.
+  const ENTRY_EMAIL = ''; // tidak dipakai: email diambil Form dari akun Google yang login
 
   const EMAIL_DOMAIN = 'unri.ac.id';
   const GRACE_MS = 15000;      // 15 detik pertama setelah soal terbuka tidak dihitung pelanggaran
@@ -120,12 +119,10 @@
   async function mulaiUjian() {
     nama = $('inpNama').value.trim();
     nim = $('inpNim').value.trim().toUpperCase();
-    email = $('inpEmail').value.trim();
     kelas = $('inpKelas').value;
     const msg = $('gateMsg');
 
-    if (!nama || !nim || !email || !kelas) { msg.textContent = 'Semua field wajib diisi!'; return; }
-    if (!emailOk(email)) { msg.textContent = 'Gunakan email UNRI (berakhiran @' + EMAIL_DOMAIN + ').'; return; }
+    if (!nama || !nim || !kelas) { msg.textContent = 'Semua field wajib diisi!'; return; }
 
     $('btnMasuk').disabled = true;
     msg.textContent = 'Memeriksa...';
