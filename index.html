@@ -54,8 +54,8 @@
 </div>
 
 <div id="quizWrap">
-  <!-- sandbox: tanpa allow-top-navigation dan tanpa allow-popups, jadi Form tidak bisa memindahkan halaman wrapper atau membuka tab baru (login Google / ganti akun) -->
-  <iframe id="quizFrame" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
+  <!-- sandbox: tanpa allow-top-navigation, jadi isi Form tidak bisa memindahkan halaman wrapper -->
+  <iframe id="quizFrame" sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
 </div>
 
 <script>
@@ -82,7 +82,7 @@
   const emailOk = e => new RegExp('^[^\\s@]+@([a-z0-9-]+\\.)*' + EMAIL_DOMAIN.replace(/\./g, '\\.') + '$', 'i').test(e);
 
   let nama = "", nim = "", kelas = "", email = "";
-  let layar = 'gate'; // gate | wait | quiz | lock | ditutup | selesai | info | terkirim
+  let layar = 'gate'; // gate | wait | quiz | lock | ditutup | selesai | info
   let pollT = null, tungguT = null, graceSampai = 0, terakhirLapor = 0, cekBusy = false;
 
   const P = a => ({ action: a, nim, nama, kelas, email });
@@ -147,7 +147,6 @@
 
   // satu pintu untuk semua status dari server
   function terapkan(cek) {
-    if (layar === 'terkirim') return; // sudah submit: jangan buka soal lagi
     const w = cek.waktu, st = w.status;
     if (cek.terkunci) return tampilLock(cek.pelanggaran);
     if (st === 'sedang_berlangsung') return layar === 'quiz' ? setBanner(cek.pelanggaran) : bukaQuiz(cek.pelanggaran);
@@ -166,7 +165,7 @@
   function bukaQuiz(pelanggaran) {
     clearInterval(tungguT);
     const f = $('quizFrame');
-    if (!f.getAttribute('src')) { srcDiset = true; f.src = buatUrlFormTerisi(); } // hanya sekali; setelah unlock cukup ditampilkan lagi
+    if (!f.getAttribute('src')) f.src = buatUrlFormTerisi(); // hanya sekali; setelah unlock cukup ditampilkan lagi
     f.style.display = 'block';
     sembunyikanStatus();
     $('quizWrap').classList.add('show');
@@ -222,29 +221,6 @@
     if (!r.ok) return;
     setBanner(r.pelanggaran);
     if (r.terkunci) tampilLock(r.pelanggaran);
-  }
-
-  // Halaman setelah submit: iframe dimuat 2x (1 = form, 2 = halaman "respons dicatat").
-  // Begitu muncul, iframe dibuang supaya soal/tombol nilai tidak bisa dilihat lagi.
-  // CATATAN: kalau Form multi-halaman (ada tombol "Berikutnya"), hapus blok ini.
-  // Event load juga menyala untuk about:blank awal dan redirect saat Form pertama dibuka, jadi tidak boleh
-  // langsung dihitung sebagai submit. Load yang datang <20 detik dari load sebelumnya dianggap proses
-  // pembukaan awal; load yang datang setelah jeda lebih lama (peserta sudah mengerjakan) dianggap submit.
-  let srcDiset = false, muatFrame = 0, muatTerakhir = 0;
-  $('quizFrame').addEventListener('load', function () {
-    if (!srcDiset || layar !== 'quiz') return;
-    const now = Date.now();
-    if (muatFrame === 0 || now - muatTerakhir < 20000) { muatFrame++; muatTerakhir = now; return; }
-    selesaiKirim();
-  });
-
-  function selesaiKirim() {
-    layar = 'terkirim';
-    clearTimeout(pollT); clearInterval(tungguT);
-    $('warning-banner').classList.remove('show');
-    $('quizFrame').style.display = 'none';
-    $('quizFrame').src = 'about:blank';
-    tampilStatus('✅ Jawaban Terkirim', 'Terima kasih, jawabanmu sudah tersimpan. Kamu boleh menutup halaman ini.');
   }
 
   document.addEventListener('visibilitychange', function () {
