@@ -109,6 +109,8 @@
   let nama = "", nim = "", kelas = "";
   let locked = false;
   let pollTimer = null;
+  let tungguTimer = null;
+  let quizAktif = false; // pelanggaran hanya dihitung saat soal sudah terbuka (bukan di ruang tunggu)
 
   function tampilStatus(judul, teks) {
     document.getElementById('statusTitle').textContent = judul;
@@ -173,18 +175,72 @@
       tampilStatus('⛔ Waktu Ujian Sudah Habis', 'Sesi ujian untuk kelas ini sudah berakhir.');
       return;
     }
+    if (waktu.status === 'ruang_tunggu') {
+      masukRuangTunggu(waktu);
+      return;
+    }
 
     // status sedang_berlangsung -> tampilkan quiz
-    if (cek.pelanggaran > 0) {
-      document.getElementById('counter').textContent = cek.pelanggaran;
+    bukaQuiz(cek.pelanggaran);
+  }
+
+  function bukaQuiz(pelanggaran) {
+    sembunyikanStatus();
+    if (pelanggaran > 0) {
+      document.getElementById('counter').textContent = pelanggaran;
       document.getElementById('warning-banner').classList.add('show');
     }
     document.getElementById('quizFrame').src = buatUrlFormTerisi(nama, nim, kelas);
     document.getElementById('quizFrame').style.display = 'block';
     document.getElementById('quizWrap').classList.add('show');
+    quizAktif = true; // mulai sekarang keluar-app dihitung pelanggaran
 
     // Cek berkala tiap 30 detik: apakah waktu habis / di-unlock ulang / di-lock dari dashboard
     pollTimer = setInterval(polling, 30000);
+  }
+
+  // Ruang tunggu: gerbang sudah buka, soal baru muncul otomatis saat jam mulai resmi
+  function masukRuangTunggu(waktu) {
+    let sisa = waktu.sisaDetik;
+    const jamMulai = String(waktu.mulaiJam).padStart(2, '0') + ':' + String(waktu.mulaiMenit).padStart(2, '0');
+
+    function render() {
+      const m = String(Math.floor(sisa / 60)).padStart(2, '0');
+      const s = String(sisa % 60).padStart(2, '0');
+      tampilStatus('⏳ Ruang Tunggu', 'Ujian dimulai pukul ' + jamMulai + '. Tetap di halaman ini, soal akan terbuka otomatis. Mulai dalam ' + m + ':' + s);
+    }
+    render();
+
+    let tick = 0;
+    tungguTimer = setInterval(async function () {
+      sisa--;
+      tick++;
+      if (sisa > 0) render();
+
+      // Sinkron ke server tiap 10 detik, dan terus saat hitung mundur habis
+      if (sisa <= 0 || tick % 10 === 0) {
+        const cek = await panggilBackend({ action: 'checkStatus', nim, kelas });
+        if (!cek.ok) return;
+
+        if (cek.terkunci) {
+          locked = true;
+          clearInterval(tungguTimer);
+          tampilStatus('🔒 Ujian Dikunci', 'Hubungi pengawas/dosen untuk membuka kunci.');
+          return;
+        }
+        const st = cek.waktu.status;
+        if (st === 'sedang_berlangsung') {
+          clearInterval(tungguTimer);
+          bukaQuiz(cek.pelanggaran);
+        } else if (st === 'ruang_tunggu') {
+          sisa = cek.waktu.sisaDetik;
+          render();
+        } else if (st === 'sudah_selesai') {
+          clearInterval(tungguTimer);
+          tampilStatus('⛔ Waktu Ujian Sudah Habis', 'Sesi ujian untuk kelas ini sudah berakhir.');
+        }
+      }
+    }, 1000);
   }
 
   async function polling() {
@@ -206,7 +262,7 @@
   }
 
   async function catatPelanggaran() {
-    if (locked || !nim) return;
+    if (locked || !nim || !quizAktif) return;
     const res = await panggilBackend({ action: 'reportViolation', nim, nama, kelas });
     if (!res.ok) return;
 
