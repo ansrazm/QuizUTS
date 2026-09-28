@@ -166,7 +166,7 @@
   function bukaQuiz(pelanggaran) {
     clearInterval(tungguT);
     const f = $('quizFrame');
-    if (!f.getAttribute('src')) f.src = buatUrlFormTerisi(); // hanya sekali; setelah unlock cukup ditampilkan lagi
+    if (!f.getAttribute('src')) { srcDiset = true; f.src = buatUrlFormTerisi(); } // hanya sekali; setelah unlock cukup ditampilkan lagi
     f.style.display = 'block';
     sembunyikanStatus();
     $('quizWrap').classList.add('show');
@@ -227,10 +227,15 @@
   // Halaman setelah submit: iframe dimuat 2x (1 = form, 2 = halaman "respons dicatat").
   // Begitu muncul, iframe dibuang supaya soal/tombol nilai tidak bisa dilihat lagi.
   // CATATAN: kalau Form multi-halaman (ada tombol "Berikutnya"), hapus blok ini.
-  let muatFrame = 0;
+  // Event load juga menyala untuk about:blank awal dan redirect saat Form pertama dibuka, jadi tidak boleh
+  // langsung dihitung sebagai submit. Load yang datang <20 detik dari load sebelumnya dianggap proses
+  // pembukaan awal; load yang datang setelah jeda lebih lama (peserta sudah mengerjakan) dianggap submit.
+  let srcDiset = false, muatFrame = 0, muatTerakhir = 0;
   $('quizFrame').addEventListener('load', function () {
-    muatFrame++;
-    if (muatFrame >= 2 && layar === 'quiz') selesaiKirim();
+    if (!srcDiset || layar !== 'quiz') return;
+    const now = Date.now();
+    if (muatFrame === 0 || now - muatTerakhir < 20000) { muatFrame++; muatTerakhir = now; return; }
+    selesaiKirim();
   });
 
   function selesaiKirim() {
