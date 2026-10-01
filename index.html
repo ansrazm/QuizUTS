@@ -7,10 +7,13 @@
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, sans-serif; background: #f5f5f5; height: 100vh; display: flex; flex-direction: column; }
-  #gate { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; }
+  #gate { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; overflow-y: auto; }
   #gate.hidden { display: none; }
   #gate .box { max-width: 380px; width: 100%; }
   #gate h2 { margin-bottom: 16px; color: #222; }
+  #gate .info { text-align: left; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; font-size: 13.5px; line-height: 1.5; }
+  #gate .info ul { margin: 6px 0 0 18px; }
+  #gate .info li { margin-bottom: 2px; }
   #gate input, #gate select { width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 15px; }
   #gate button { width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; }
   #gate button:disabled { opacity: .6; cursor: default; }
@@ -31,6 +34,14 @@
 <div id="gate">
   <div class="box">
     <h2>🔒 Masuk Ujian</h2>
+    <div class="info">
+      <b>Informasi Ujian</b>
+      <ul>
+        <li>Waktu ujian: <b>30 menit</b>, sesuai kelas yang dipilih</li>
+        <li>Jangan pindah tab/jendela, ujian bisa <b>terkunci otomatis</b></li>
+        <li>Kalau terkunci: <b>jangan keluar/refresh</b>, lapor ke <b>pengawas/dosen</b></li>
+      </ul>
+    </div>
     <input type="text" id="inpNama" placeholder="Nama Lengkap" autocomplete="off">
     <input type="text" id="inpNim" placeholder="NIM" autocomplete="off">
     <select id="inpKelas">
@@ -54,8 +65,8 @@
 </div>
 
 <div id="quizWrap">
-  <!-- sandbox: tanpa allow-top-navigation, jadi isi Form tidak bisa memindahkan halaman wrapper -->
-  <iframe id="quizFrame" sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
+  <!-- sandbox: tanpa allow-top-navigation dan tanpa allow-popups, jadi Form tidak bisa memindahkan halaman wrapper atau membuka tab baru (mis. sign-in) -->
+  <iframe id="quizFrame" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
 </div>
 
 <script>
@@ -68,9 +79,9 @@
   const ENTRY_JADWAL = '1339155667';
   const ENTRY_EMAIL = ''; // tidak dipakai: email diambil Form dari akun Google yang login
 
-  const EMAIL_DOMAIN = 'unri.ac.id';
   const GRACE_MS = 15000;      // 15 detik pertama setelah soal terbuka tidak dihitung pelanggaran
   const DEBOUNCE_MS = 3000;    // beberapa event dalam jeda ini dihitung 1 pelanggaran
+  const FOKUS_CADANGAN = false; // true: cek fokus tiap 0,5 detik sebagai cadangan blur. Bisa memicu pelanggaran palsu di HP tertentu; aktifkan hanya setelah dites.
 
   const KELAS_KE_JADWAL_TEXT = {
     'Asp Senin jam 13.30': 'Senin, 14.15 - 14.45 (Kelas jam 13.30)',
@@ -79,7 +90,6 @@
   };
 
   const $ = id => document.getElementById(id);
-  const emailOk = e => new RegExp('^[^\\s@]+@([a-z0-9-]+\\.)*' + EMAIL_DOMAIN.replace(/\./g, '\\.') + '$', 'i').test(e);
 
   let nama = "", nim = "", kelas = "", email = "";
   let layar = 'gate'; // gate | wait | quiz | lock | ditutup | selesai | info
@@ -131,7 +141,7 @@
     if (!cek.ok) { msg.textContent = cek.error || 'Gagal memeriksa status.'; return; }
 
     $('gate').classList.add('hidden');
-    terapkan(cek);
+    try { terapkan(cek); } catch (e) { tampilStatus('⚠️ Terjadi Kesalahan', 'Muat ulang halaman atau hubungi pengawas. (' + e.message + ')'); }
   }
 
   function infoWaktu(w) {
@@ -152,7 +162,7 @@
     if (st === 'sedang_berlangsung') return layar === 'quiz' ? setBanner(cek.pelanggaran) : bukaQuiz(cek.pelanggaran);
     if (st === 'ruang_tunggu') return layar === 'wait' ? 0 : masukRuangTunggu(w);
     clearInterval(tungguT);
-    const [j, t] = infoWaktu(w);
+    const [j, t] = infoWaktu(w) || ['⚠️ Status Tidak Dikenal', 'Hubungi pengawas. (' + st + ')'];
     layar = st === 'ditutup' ? 'ditutup' : (st === 'sudah_selesai' ? 'selesai' : 'info');
     tampilStatus(j, t);
     if (layar === 'ditutup') jadwalPoll(10000);
@@ -223,13 +233,24 @@
     if (r.terkunci) tampilLock(r.pelanggaran);
   }
 
+  // saat kembali ke tab dalam kondisi terkunci/ditutup, langsung cek ke server (timer tab latar bisa tertunda)
+  const cekUlang = () => { if (layar === 'lock' || layar === 'ditutup') { clearTimeout(pollT); poll(); } };
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) catatPelanggaran();
+    if (document.hidden) catatPelanggaran(); else cekUlang();
   });
+  window.addEventListener('focus', cekUlang);
   // blur juga menyala saat mahasiswa mengklik isi Form (iframe). Yang dihitung hanya kalau fokus benar-benar keluar dari halaman.
   window.addEventListener('blur', function () {
     setTimeout(function () { if (!document.hasFocus()) catatPelanggaran(); }, 150);
   });
+  if (FOKUS_CADANGAN) {
+    let fokusAda = document.hasFocus();
+    setInterval(function () {
+      const ada = document.hasFocus();
+      if (fokusAda && !ada) catatPelanggaran();
+      fokusAda = ada;
+    }, 500);
+  }
   document.addEventListener('contextmenu', e => e.preventDefault());
 </script>
 
